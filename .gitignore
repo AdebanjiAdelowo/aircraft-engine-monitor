@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.zip
+audio_chunks/
+audio_src/
+recordings/
+audio_system.log
+simulation_data/
+.claude/
