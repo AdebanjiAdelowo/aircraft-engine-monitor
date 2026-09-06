@@ -2,7 +2,7 @@
 
 A real-time aircraft engine monitoring system that runs on a **Raspberry Pi**, records audio from a microphone, extracts engine RPM and status via DSP, and transmits results to an **ESP32** microcontroller over UART.
 
-Developed and tested against the **Tecnam P92** (Rotax 912, a 4-cylinder, 4-stroke engine).
+Developed and tested against audio recordings from a **Tecnam P92** (Rotax 912, a 4-cylinder, 4-stroke engine). This is a personal research and prototyping project: it is not certified avionics equipment and has not been through flight-safety validation.
 
 ---
 
@@ -19,7 +19,7 @@ Microphone
     ▼  (queue)
 [ Analyzer thread ]
   Decimation       44,100 Hz → 500 Hz
-  FFT Peak Finder  finds dominant frequency in 10–200 Hz band
+  FFT Peak Finder  finds dominant frequency in 10 to 200 Hz band
   RPM Calculator   RPM = freq × 60 / EVENTS_PER_CYCLE
     │
     ▼
