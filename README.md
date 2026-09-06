@@ -1,8 +1,8 @@
-# Audio Engine Monitor — Python Source
+# Aircraft Engine Audio Monitor
 
 A real-time aircraft engine monitoring system that runs on a **Raspberry Pi**, records audio from a microphone, extracts engine RPM and status via DSP, and transmits results to an **ESP32** microcontroller over UART.
 
-Developed and validated against the **Tecnam P92** (Rotax 912 — 4-cylinder, 4-stroke engine).
+Developed and tested against the **Tecnam P92** (Rotax 912, a 4-cylinder, 4-stroke engine).
 
 ---
 
@@ -47,7 +47,7 @@ RPM = peak_frequency_Hz × 60 / EVENTS_PER_CYCLE
 |-----------|------|
 | Raspberry Pi (Zero / 3 / 4) | Runs the Python audio processing system |
 | USB or I2S microphone | Captures engine audio |
-| ESP32 | Receives RPM data over UART, drives display / alerts |
+| ESP32 | Receives RPM data over UART, drives display and alerts |
 
 **Wiring (UART):**
 
@@ -62,35 +62,21 @@ RPi GND          ──►  ESP32 GND
 ## Project Structure
 
 ```
-BANJI_WORK_CODE/
-│
-├── rpi_test_final.py        # Main application — deploy this on the RPi
-│
-├── audio_src/               # Modular library (extended feature set)
-│   ├── DataIO/
-│   │   ├── Communication/   # Audio stream interfaces and simulator
-│   │   └── Representation/  # Datum data container
-│   ├── FeatureEngineering/
-│   │   ├── Filters/         # Butterworth, decimation, tunable bandpass
-│   │   ├── Spectrograms/    # FFT / RFFT implementations
-│   │   └── FeatureExtraction/
-│   │       └── EngineAnalysis.py  # Full pipeline incl. TFLite engine state classifier
-│   └── Sensors/             # Vibration sensor interface
-│
-├── simulation_data/
-│   └── audios/
-│       ├── 1000_rpm.wav     # Reference recording — Rotax 912 at ~1000 RPM
-│       ├── volo1.wav        # In-flight recording
-│       └── Tecnam_P92.mp3   # Aircraft reference audio
-│
-├── test_pipeline.py         # Level 1 test — DSP pipeline, no hardware needed
-├── mock_esp32.py            # Level 2 test — virtual ESP32 over socat UART
-├── test_hardware.py         # Level 3 test — full hardware check on the RPi
-│
-├── audio_chunks/            # Sample chunked WAV files
-├── audio_system.log         # Runtime log output
-└── recordings/              # Created at runtime — stores recorded WAV files
+aircraft-engine-monitor/
+├── rpi_test_final.py   # Main application, deploy this on the RPi
+├── rpi_test.py         # Earlier iteration of the monitoring script
+├── rpi_test_fft.py     # Iteration with added FFT export/logging
+├── rpi_test_new.py     # Iteration with rule-based engine-state classification
+├── test_pipeline.py    # Level 1 test: DSP pipeline, no hardware needed
+├── mock_esp32.py        # Level 2 test: virtual ESP32 over socat UART
+├── test_hardware.py    # Level 3 test: full hardware check on the RPi
+├── docs/               # Technical documentation
+└── requirements (see Running the System)
 ```
+
+`rpi_test.py`, `rpi_test_fft.py`, and `rpi_test_new.py` are earlier development iterations kept for reference; `rpi_test_final.py` is the version documented below and used by `test_pipeline.py` and `test_hardware.py`.
+
+At runtime the system also creates `recordings/` (recorded WAV chunks) and `audio_system.log`; these, along with local development and simulation assets such as `simulation_data/audios/` and `audio_chunks/`, are excluded from the repository via `.gitignore`. Because `simulation_data/audios/` is not included, `test_pipeline.py` skips the WAV-file cases when the files are absent and still runs its synthetic silent-signal and tone tests.
 
 ---
 
@@ -167,41 +153,32 @@ python rpi_test_final.py
 
 ## Testing
 
-### Level 1 — DSP pipeline (no hardware, runs on any machine)
+### Level 1: DSP pipeline (no hardware, runs on any machine)
 
 ```bash
 python test_pipeline.py
 ```
 
-Feeds simulation WAV files and synthetic tones through the feature engineering pipeline and validates RPM, engine status, and frequency outputs.
-
-Expected output (all PASS):
-
-```
-1000_rpm.wav    → RPM ≈ 1004, status ON
-volo1.wav       → RPM ≈ 1263, status ON
-silent signal   → RPM = 0,    status OFF
-83.3 Hz tone    → RPM ≈ 1250, status ON
-```
+Runs the synthetic silent-signal and pure-tone checks directly (RPM = 0 for silence, RPM in [1000, 1500] for an 83.3 Hz tone treated as the 2nd harmonic). If WAV files are present under `simulation_data/audios/` (not included in this repository), the script also validates RPM and engine status against those recordings; otherwise those cases are skipped.
 
 ---
 
-### Level 2 — UART simulation (no ESP32 hardware)
+### Level 2: UART simulation (no ESP32 hardware)
 
 Requires `socat` (`brew install socat` on Mac, `apt install socat` on Linux).
 
-**Terminal 1** — create a virtual serial port pair:
+**Terminal 1**: create a virtual serial port pair:
 ```bash
 socat -d -d pty,raw,echo=0 pty,raw,echo=0
 # note the two /dev/ttys??? paths printed, e.g. /dev/ttys004 and /dev/ttys005
 ```
 
-**Terminal 2** — start the mock ESP32 (use the second port):
+**Terminal 2**: start the mock ESP32 (use the second port):
 ```bash
 python mock_esp32.py /dev/ttys005
 ```
 
-**Terminal 3** — temporarily change `UART_PORT` in `rpi_test_final.py` to the first port, then run:
+**Terminal 3**: temporarily change `UART_PORT` in `rpi_test_final.py` to the first port, then run:
 ```bash
 python rpi_test_final.py
 ```
@@ -210,7 +187,7 @@ The mock ESP32 validates CRC, sends ACKs, and logs every received packet with RP
 
 ---
 
-### Level 3 — Full hardware test (run on Raspberry Pi)
+### Level 3: Full hardware test (run on Raspberry Pi)
 
 ```bash
 python test_hardware.py
@@ -242,12 +219,8 @@ The main thread blocks on a `threading.Event` and exits cleanly on `q`, `Ctrl+C`
 
 ---
 
-## Extended Library (`audio_src/`)
+## Possible Extensions
 
-The `audio_src/` directory contains a more complete modular library used during research and development:
-
-- **`EngineState`** — uses a TFLite model to classify engine state (on / off / fault) from the RFFT spectrum, with a rolling majority-vote buffer over 70 windows
-- **`TunableFilter`** — adaptive bandpass filter that tracks and locks onto the dominant engine frequency
-- **`RTAudioStreamSimulator`** — replays recorded WAV files as if they were a live audio stream, for offline testing
-
-These components are not yet integrated into `rpi_test_final.py` but are available for future use.
+- Learned engine-state classification (on / off / fault) from the spectrum, replacing the current threshold-based RPM/status logic
+- An adaptive bandpass filter that tracks and locks onto the dominant engine frequency instead of a fixed 10 to 200 Hz search band
+- An offline audio-stream simulator that replays recorded WAV files as a live stream, for testing the recorder/analyzer/UART pipeline without a microphone
