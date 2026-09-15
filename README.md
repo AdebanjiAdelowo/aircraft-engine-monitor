@@ -224,11 +224,4 @@ The main thread blocks on a `threading.Event` and exits cleanly on `q`, `Ctrl+C`
 - Learned engine-state classification (on / off / fault) from the spectrum, replacing the current threshold-based RPM/status logic
 - An adaptive bandpass filter that tracks and locks onto the dominant engine frequency instead of a fixed 10 to 200 Hz search band
 - An offline audio-stream simulator that replays recorded WAV files as a live stream, for testing the recorder/analyzer/UART pipeline without a microphone
-
-## Remaining Work
-
-A tacholess/order-tracking validation study is the next planned extension: validating the
-existing argmax and harmonic-template RPM estimators against the public MaFaulDa dataset (audio +
-vibration + tachometer), which provides real ground truth without new hardware data collection.
-Not yet started. Portfolio-wide project status is tracked centrally in the author's Selected
-Projects documentation; this project's status there is DEFERRED RESEARCH.
+- A tacholess/order-tracking validation study: comparing the existing argmax and harmonic-template RPM estimators against the public MaFaulDa dataset (audio, vibration, and tachometer), which provides real ground truth without new hardware data collection
