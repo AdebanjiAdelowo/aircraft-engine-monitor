@@ -123,6 +123,26 @@ The ESP32 must reply to **Data** packets with a 3-byte ACK:
 
 CRC8 uses polynomial `0x07` (same as CRC-8/SMBUS).
 
+The acknowledgement exchange for one data packet (`send_uart_packet`):
+
+```mermaid
+sequenceDiagram
+    participant P as Raspberry Pi (analyzer)
+    participant E as ESP32
+    Note over P: if the health monitor requests it, reconnect first
+    loop up to MAX_RETRIES = 2 attempts
+        P->>E: 0xAA | len | seq, timestamp, rpm, status, peak_freq | CRC8 | 0x55
+        alt ACK within ACK_TIMEOUT = 4 s and seq matches
+            E-->>P: 0x06 | seq_low | seq_high
+            Note over P: record success, stop retrying
+        else no ACK, bad ACK or sequence mismatch
+            Note over P: record failure, retry
+        end
+    end
+```
+
+Time-sync (`0xAB`) and record-alert (`0xAC`) packets use the same framing.
+
 ---
 
 ## Running the System
@@ -216,6 +236,28 @@ The system runs six concurrent daemon threads:
 | `input_handler` | Handles interactive keyboard commands without blocking the main thread |
 
 The main thread blocks on a `threading.Event` and exits cleanly on `q`, `Ctrl+C`, or `Ctrl+D`.
+
+How the threads share data in `rpi_test_final.py`. Every UART write goes through one lock, and the
+DSP pipeline is the three blocks registered in `main()`:
+
+```mermaid
+flowchart LR
+    MIC["microphone"] --> REC["recorder<br/>5 s WAV chunks, 44.1 kHz<br/>saved to ./recordings/"]
+    REC -->|analyze_queue| AN
+    subgraph AN["analyzer: DSP pipeline"]
+        D["Decimation<br/>scipy decimate, IIR, to 500 Hz"] --> PK["FrequencyPeakFinder<br/>Hann window + FFT,<br/>argmax in 10 to 200 Hz,<br/>on raw and decimated signal"]
+        PK --> R["RPM<br/>decimated peak × 60 / 4<br/>status = RPM > 100"]
+    end
+    AN --> L{{"uart_lock"}}
+    SYNC["sync_sender<br/>time sync every 60 s"] --> L
+    HC["uart_health_check<br/>success rate, reconnect"] -.-> L
+    IN["input_handler<br/>h, s, r, q"] -.-> L
+    L --> UART["/dev/serial0 → ESP32"]
+    ST["status_monitor<br/>log every 5 min"]
+```
+
+The data packet's `peak_freq` field carries the peak found on the raw 44.1 kHz signal, while the
+`rpm` field is computed from the peak found on the decimated signal.
 
 ---
 
