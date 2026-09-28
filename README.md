@@ -261,6 +261,15 @@ The data packet's `peak_freq` field carries the peak found on the raw 44.1 kHz s
 
 ---
 
+## Limitations
+
+- No tachometer reference was recorded, so RPM accuracy is not measured against ground truth.
+- The peak picker can lock onto the wrong engine order: on the 1000 rpm recording, 3 of 14
+  non-overlapping five-second chunks select the second-order peak instead of the fourth and report
+  about 500 rpm instead of about 1000 (a 21% chunk-level failure rate; see section 12 of
+  [the technical documentation](docs/Aircraft_Engine_RPM_DSP_Technical_Documentation.md)).
+- The estimator has no memory across chunks, so a wrong chunk is neither propagated nor corrected.
+
 ## Possible Extensions
 
 - Learned engine-state classification (on / off / fault) from the spectrum, replacing the current threshold-based RPM/status logic
